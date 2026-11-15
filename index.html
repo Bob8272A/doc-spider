@@ -37,13 +37,13 @@
   html,body{height:100%}
   body{margin:0;color:var(--text);font:15px/1.55 "Segoe UI",system-ui,-apple-system,Roboto,sans-serif;background:var(--bg);overflow:hidden}
   #bg{position:fixed;inset:0;z-index:0;overflow:hidden;
-      background:radial-gradient(1200px 700px at 15% -10%,color-mix(in srgb,var(--accent2) 28%,transparent),transparent 60%),
-                 radial-gradient(900px 600px at 95% 10%,color-mix(in srgb,var(--accent) 22%,transparent),transparent 55%),
+      background:radial-gradient(1200px 700px at 15% -10%,var(--glowA,color-mix(in srgb,var(--accent2) 28%,transparent)),transparent 60%),
+                 radial-gradient(900px 600px at 95% 10%,var(--glowB,color-mix(in srgb,var(--accent) 22%,transparent)),transparent 55%),
                  linear-gradient(180deg,var(--bg),var(--bg2))}
   [data-theme=contrast] #bg{background:#000}
   #bg i{position:absolute;border-radius:50%;filter:blur(70px);opacity:.45;animation:drift 22s ease-in-out infinite alternate}
-  #bg i:nth-child(1){width:420px;height:420px;left:8%;top:55%;background:var(--accent2)}
-  #bg i:nth-child(2){width:360px;height:360px;right:6%;top:62%;background:var(--accent);animation-delay:-9s}
+  #bg i:nth-child(1){width:420px;height:420px;left:8%;top:55%;background:var(--blobA,var(--accent2))}
+  #bg i:nth-child(2){width:360px;height:360px;right:6%;top:62%;background:var(--blobB,var(--accent));animation-delay:-9s}
   @keyframes drift{to{transform:translate(60px,-50px) scale(1.15)}}
   [data-fx=off] #bg i,[data-theme=contrast] #bg i{display:none}
 
@@ -145,6 +145,8 @@
   input[type=range]{width:100%;accent-color:var(--accent)}
   select{background:var(--glass);border:1px solid var(--line);border-radius:10px;padding:8px 10px;width:100%}
   select option{color:#000}
+  input[type=color]{width:44px;height:30px;padding:0;border:1px solid var(--line);border-radius:8px;background:none;cursor:pointer}
+  #bgCustom{display:none}
   .hint{font-size:12px;color:var(--mute);margin-top:4px}
   #installBtn{display:none}
 </style>
@@ -204,10 +206,20 @@
     <span class="sw" data-v="purple" style="background:#a78bfa;color:#a78bfa"></span><span class="sw" data-v="orange" style="background:#fb923c;color:#fb923c"></span>
     <span class="sw" data-v="red" style="background:#fb7185;color:#fb7185"></span>
   </div>
+  <div class="grp">Background (dark theme)</div>
+  <div class="opts" id="o-bg"><span class="opt" data-v="crimson">Black &amp; red</span><span class="opt" data-v="black">Pure black</span><span class="opt" data-v="aurora">Aurora</span><span class="opt" data-v="custom">Custom</span></div>
+  <div id="bgCustom"><div class="line"><span>Base color</span><input type="color" id="bgBase"></div><div class="line"><span>Glow color</span><input type="color" id="bgGlow"></div></div>
   <div class="grp">Layout</div>
   <div class="opts" id="o-layout"><span class="opt" data-v="side">List on the side</span><span class="opt" data-v="stack">List underneath</span></div>
   <div class="line" style="margin-top:14px"><span>Effects (glow, flying tags, silk)</span><span class="tog" id="t-fx"></span></div>
 
+  <div class="grp">Spider look</div>
+  <div class="line"><span>Size</span><span id="sizeLbl"></span></div>
+  <input type="range" id="size" min="0.6" max="3.5" step="0.1">
+  <div class="line"><span>Leg color</span><input type="color" id="legCol"></div>
+  <div class="line"><span>Body color</span><input type="color" id="bodyCol"></div>
+  <div class="line"><span>Silk threads on long jumps</span><span class="tog" id="t-silk"></span></div>
+  <button class="btn" id="spReset" style="margin-top:4px">Reset spider look</button>
   <div class="grp">Spider visits</div>
   <div class="opts" id="o-mode"><span class="opt" data-v="all">Everything</span><span class="opt" data-v="numbers">Numbers only</span><span class="opt" data-v="smart">Key items</span></div>
   <div class="hint" id="modeHint"></div>
@@ -236,25 +248,35 @@ const reader=$('#reader'), pagesEl=$('#pages'), summaryEl=$('#summary'), statusE
 const TYPES=['amount','percent','date','contact'];
 
 // ---------- settings ----------
-const DEFAULTS={theme:'dark',accent:'cyan',fx:true,layout:'side',mode:'all',speed:1,auto:true,model:'Qwen2.5-1.5B-Instruct-q4f16_1-MLC'};
+const SPIDER_DEF={size:1.8,leg:'#19b894',body:'#14161a',silk:true};
+const DEFAULTS={...SPIDER_DEF,bg:'crimson',bgBase:'#050002',bgGlow:'#8c0014',theme:'dark',accent:'red',fx:true,layout:'side',mode:'all',speed:1,auto:true,model:'Qwen2.5-1.5B-Instruct-q4f16_1-MLC'};
 let S={...DEFAULTS};
-try{Object.assign(S,JSON.parse(localStorage.getItem('docspider.settings.v2')||'{}'));}catch(e){}
-const save=()=>{try{localStorage.setItem('docspider.settings.v2',JSON.stringify(S));}catch(e){}};
+try{Object.assign(S,JSON.parse(localStorage.getItem('docspider.settings.v3')||'{}'));}catch(e){}
+const save=()=>{try{localStorage.setItem('docspider.settings.v3',JSON.stringify(S));}catch(e){}};
 const MODE_HINT={all:'Every amount, percentage, date and link, in reading order.',numbers:'Only dollar amounts and percentages.',smart:'Only the most important items: big amounts, key dates, and anything in the AI summary.'};
 function applySettings(){
   root.dataset.theme=S.theme;root.dataset.accent=S.accent;root.dataset.fx=S.fx?'on':'off';root.dataset.layout=S.layout;
-  for(const [id,k] of [['#o-theme','theme'],['#o-accent','accent'],['#o-mode','mode'],['#o-layout','layout']])
+  for(const [id,k] of [['#o-theme','theme'],['#o-accent','accent'],['#o-mode','mode'],['#o-layout','layout'],['#o-bg','bg']])
     document.querySelectorAll(id+' [data-v]').forEach(e=>e.classList.toggle('on',e.dataset.v===S[k]));
   $('#t-fx').classList.toggle('on',S.fx);$('#t-auto').classList.toggle('on',S.auto);
   $('#speed').value=S.speed;$('#speedLbl').textContent=S.speed+'×';$('#model').value=S.model;$('#modeHint').textContent=MODE_HINT[S.mode];
+  $('#size').value=S.size;$('#sizeLbl').textContent=S.size.toFixed(1)+'×';$('#legCol').value=S.leg;$('#bodyCol').value=S.body;$('#t-silk').classList.toggle('on',S.silk);
+  $('#bgBase').value=S.bgBase;$('#bgGlow').value=S.bgGlow;$('#bgCustom').style.display=S.bg==='custom'?'block':'none';
+  const BG={crimson:['#040001','#140006','rgba(150,0,24,.42)','rgba(95,0,14,.38)','#7a0014','#3d0009'],black:['#000','#040404','transparent','transparent','transparent','transparent'],
+            custom:[S.bgBase,S.bgBase,`color-mix(in srgb,${S.bgGlow} 45%,transparent)`,`color-mix(in srgb,${S.bgGlow} 32%,transparent)`,S.bgGlow,S.bgGlow]}[S.bg];
+  ['--bg','--bg2','--glowA','--glowB','--blobA','--blobB'].forEach((p,i)=>{if(BG&&S.theme==='dark')root.style.setProperty(p,BG[i]);else root.style.removeProperty(p);});
 }
 function bindSettings(){
-  for(const [id,k] of [['#o-theme','theme'],['#o-accent','accent'],['#o-mode','mode'],['#o-layout','layout']])
+  for(const [id,k] of [['#o-theme','theme'],['#o-accent','accent'],['#o-mode','mode'],['#o-layout','layout'],['#o-bg','bg']])
     $(id).onclick=e=>{const v=e.target.dataset.v;if(v){S[k]=v;save();applySettings();}};
   $('#t-fx').onclick=()=>{S.fx=!S.fx;save();applySettings();};
   $('#t-auto').onclick=()=>{S.auto=!S.auto;save();applySettings();};
   $('#speed').oninput=e=>{S.speed=parseFloat(e.target.value);save();applySettings();};
   $('#model').onchange=e=>{S.model=e.target.value;save();};
+  $('#size').oninput=e=>{S.size=parseFloat(e.target.value);save();applySettings();};
+  for(const [id,k] of [['#legCol','leg'],['#bodyCol','body'],['#bgBase','bgBase'],['#bgGlow','bgGlow']])$(id).oninput=e=>{S[k]=e.target.value;save();applySettings();};
+  $('#t-silk').onclick=()=>{S.silk=!S.silk;save();applySettings();};
+  $('#spReset').onclick=()=>{Object.assign(S,SPIDER_DEF);save();applySettings();};
   const open=v=>{$('#drawer').classList.toggle('open',v);$('#scrim').classList.toggle('open',v);};
   $('#gear').onclick=()=>open(true);$('#closeSet').onclick=()=>open(false);$('#scrim').onclick=()=>open(false);
   document.addEventListener('keydown',e=>{if(e.key==='Escape')open(false);});
@@ -460,7 +482,7 @@ function initLegs(){
   for(const L of spider.legs){const r=restPos(L);L.x=r.x;L.y=r.y;}
 }
 function restPos(L,lead=0){
-  const a=spider.head+L.a;return {x:spider.x+Math.cos(a)*L.reach+spider.vx*lead,y:spider.y+Math.sin(a)*L.reach+spider.vy*lead};
+  const a=spider.head+L.a;const r=L.reach*S.size;return {x:spider.x+Math.cos(a)*r+spider.vx*lead,y:spider.y+Math.sin(a)*r+spider.vy*lead};
 }
 function placeSpider(x,y){spider.x=x;spider.y=y;spider.vx=spider.vy=0;initLegs();spider.visible=true;}
 function contentPoint(el){const r=el.getBoundingClientRect(),p=pagesEl.getBoundingClientRect();return {x:r.left+r.width/2-p.left,y:r.top+r.height/2-p.top};}
@@ -469,7 +491,7 @@ function moveTo(x,y){
   return new Promise(res=>{
     const dx=x-spider.x,dy=y-spider.y,dist=Math.hypot(dx,dy);
     const dur=Math.max(0.1,Math.min(0.85,dist/(620*S.speed)));
-    if(dist>420&&S.fx){for(let k=0;k<4;k++)spider.silk.push({x:spider.x+(Math.random()-.5)*70,y:spider.y+(Math.random()-.5)*30,a:1,hold:true});}
+    if(dist>420&&S.fx&&S.silk){for(let k=0;k<4;k++)spider.silk.push({x:spider.x+(Math.random()-.5)*70,y:spider.y+(Math.random()-.5)*30,a:1,hold:true});}
     spider.move={x0:spider.x,y0:spider.y,x1:x,y1:y,t:0,dur,res};
   });
 }
@@ -498,8 +520,8 @@ function updateSpider(dt){
       s.x1+=(tgt.x-s.x1)*0.5;s.y1+=(tgt.y-s.y1)*0.5;
       L.x=s.x0+(s.x1-s.x0)*k;L.y=s.y0+(s.y1-s.y0)*k;if(k>=1)L.step=null;continue;
     }
-    const tgt=restPos(L,0.06),off=Math.hypot(tgt.x-L.x,tgt.y-L.y),far=Math.hypot(L.x-spider.x,L.y-spider.y)>L1+L2-3;
-    if(far||(off>15&&stepping[1-L.grp]===0)||off>30){L.step={x0:L.x,y0:L.y,x1:tgt.x,y1:tgt.y,t:0,dur:Math.max(0.035,0.09-sp/20000)};stepping[L.grp]++;}
+    const tgt=restPos(L,0.06),off=Math.hypot(tgt.x-L.x,tgt.y-L.y),far=Math.hypot(L.x-spider.x,L.y-spider.y)>(L1+L2)*S.size-3;
+    if(far||(off>15*S.size&&stepping[1-L.grp]===0)||off>30*S.size){L.step={x0:L.x,y0:L.y,x1:tgt.x,y1:tgt.y,t:0,dur:Math.max(0.035,0.09-sp/20000)};stepping[L.grp]++;}
   }
   for(const s of spider.silk)if(!s.hold)s.a-=dt*1.4;
   spider.silk=spider.silk.filter(s=>s.a>0);
@@ -513,26 +535,26 @@ function drawSpider(){
   const p=pagesEl.getBoundingClientRect(),rr=reader.getBoundingClientRect();
   const X=x=>x+p.left,Y=y=>y+p.top;
   g.save();g.beginPath();g.rect(rr.left,rr.top,rr.width,rr.height);g.clip();
-  const LEG='#19b894',DOT='#0d3b33';
+  const k=S.size,l1=L1*k,l2=L2*k,LEG=S.leg,DOT=S.body;
   // silk threads
   g.lineWidth=1;for(const s of spider.silk){g.strokeStyle=`rgba(25,184,148,${0.75*s.a})`;g.beginPath();g.moveTo(X(s.x),Y(s.y));g.lineTo(X(spider.x),Y(spider.y));g.stroke();}
   const bx=X(spider.x),by=Y(spider.y),h=spider.head;
   // legs: two segments with a knee, feet planted
-  g.lineWidth=1.25;g.lineCap='round';g.lineJoin='round';
+  g.lineWidth=1.25*Math.max(1,k*0.75);g.lineCap='round';g.lineJoin='round';
   for(const L of spider.legs){
-    const hx=bx+Math.cos(h+L.side*1.57)*3.2+Math.cos(h)*(1.5-L.i)*2.2, hy=by+Math.sin(h+L.side*1.57)*3.2+Math.sin(h)*(1.5-L.i)*2.2;
-    const fxp=X(L.x),fyp=Y(L.y);let dx=fxp-hx,dy=fyp-hy,d=Math.hypot(dx,dy)||0.01;const dd=Math.min(d,L1+L2-0.5);
-    const a1=(L1*L1-L2*L2+dd*dd)/(2*dd),hh=Math.sqrt(Math.max(0,L1*L1-a1*a1));
+    const hx=bx+(Math.cos(h+L.side*1.57)*3.2+Math.cos(h)*(1.5-L.i)*2.2)*k, hy=by+(Math.sin(h+L.side*1.57)*3.2+Math.sin(h)*(1.5-L.i)*2.2)*k;
+    const fxp=X(L.x),fyp=Y(L.y);let dx=fxp-hx,dy=fyp-hy,d=Math.hypot(dx,dy)||0.01;const dd=Math.min(d,l1+l2-0.5);
+    const a1=(l1*l1-l2*l2+dd*dd)/(2*dd),hh=Math.sqrt(Math.max(0,l1*l1-a1*a1));
     const ux=dx/d,uy=dy/d;let nx=-uy,ny=ux;
     const fwd=(L.i<2?1:-1);if((nx*Math.cos(h)+ny*Math.sin(h))*fwd<0){nx=-nx;ny=-ny;}
     const kx=hx+ux*a1+nx*hh*0.75,ky=hy+uy*a1+ny*hh*0.75;
     g.strokeStyle=LEG;g.beginPath();g.moveTo(hx,hy);g.lineTo(kx,ky);g.lineTo(fxp,fyp);g.stroke();
-    g.fillStyle=DOT;g.beginPath();g.arc(kx,ky,1.5,0,6.283);g.fill();g.beginPath();g.arc(fxp,fyp,1.7,0,6.283);g.fill();
+    g.fillStyle=DOT;g.beginPath();g.arc(kx,ky,1.5*Math.sqrt(k),0,6.283);g.fill();g.beginPath();g.arc(fxp,fyp,1.7*Math.sqrt(k),0,6.283);g.fill();
   }
   // body: small dark elongated oval with a head
-  g.save();g.translate(bx,by);g.rotate(h);
+  g.save();g.translate(bx,by);g.rotate(h);g.scale(k,k);
   g.fillStyle='rgba(0,0,0,.18)';g.beginPath();g.ellipse(-1,3,10,5.5,0,0,6.283);g.fill();
-  g.fillStyle='#14161a';g.beginPath();g.ellipse(-2.5,0,8.5,4.6,0,0,6.283);g.fill();
+  g.fillStyle=S.body;g.beginPath();g.ellipse(-2.5,0,8.5,4.6,0,0,6.283);g.fill();
   g.beginPath();g.ellipse(6.2,0,3.4,3,0,0,6.283);g.fill();
   g.fillStyle='rgba(255,255,255,.22)';g.beginPath();g.ellipse(-4,-1.4,4,1.2,0,0,6.283);g.fill();
   g.restore();g.restore();
