@@ -616,44 +616,66 @@ function stopTour(){tourToken++;touring=false;$('#tour').textContent='Send spide
 $('#tour').onclick=()=>{if(touring){stopTour();showSummary();}else tour();};
 
 // ---------- quick extractive summary ----------
-function extractive(text,k=6){
+function topSentences(text,k){
   const sents=text.replace(/\s+/g,' ').split(/(?<=[.!?])\s+(?=[A-Z"(\[])/).map(x=>x.trim()).filter(x=>x.length>=40&&x.length<=300);
-  if(!sents.length)return text.slice(0,600);
   const stop=new Set('the a an and or of to in for on with as by is are was were be been that this it its at from which will may our we their they not have has had can'.split(' '));
   const freq={};sents.forEach(s=>s.toLowerCase().match(/[a-z]{3,}/g)?.forEach(w=>{if(!stop.has(w))freq[w]=(freq[w]||0)+1;}));
-  const scored=sents.map((s,i)=>{const ws=s.toLowerCase().match(/[a-z]{3,}/g)||[];let sc=0;ws.forEach(w=>sc+=freq[w]||0);sc=sc/Math.sqrt(ws.length||1);if(/\d/.test(s))sc*=1.15;return {s,i,sc};}).sort((a,b)=>b.sc-a.sc).slice(0,k).sort((a,b)=>a.i-b.i);
-  return '• '+scored.map(x=>x.s).join('\n• ')+'\n\n(Quick extract. Press “Summarize with AI” for a real summary.)';
+  return sents.map((s,i)=>{const ws=s.toLowerCase().match(/[a-z]{3,}/g)||[];let sc=0;ws.forEach(w=>sc+=freq[w]||0);sc=sc/Math.sqrt(ws.length||1);if(/\d/.test(s))sc*=1.15;if(KEYS.test(s))sc*=1.1;return {s,i,sc};})
+    .sort((a,b)=>b.sc-a.sc).slice(0,k).sort((a,b)=>a.i-b.i).map(x=>x.s);
+}
+function extractive(text,k=6){
+  const top=topSentences(text,k);if(!top.length)return text.slice(0,600);
+  return '• '+top.join('\n• ')+'\n\n(Quick extract. Press “Summarize with AI” for a real summary.)';
 }
 
 // ---------- in-browser LLM ----------
+// Prompts are kept short on purpose: long prompts make weaker graphics cards hang and drop the model.
+const SMALL='Qwen2.5-0.5B-Instruct-q4f16_1-MLC';
 async function getEngine(modelId){
   if(engine&&engineModel===modelId)return engine;
   if(!navigator.gpu)throw new Error('WebGPU is not available. Use a recent Chrome or Edge, or keep the quick extract.');
+  if(engine){try{await engine.unload();}catch(e){}engine=null;}
   setStatus('Loading AI library…',0.02);const webllm=await import(WEBLLM);
   engine=await webllm.CreateMLCEngine(modelId,{initProgressCallback:p=>setStatus(p.text.slice(0,90),p.progress)});engineModel=modelId;return engine;
 }
-function chunkText(t,size=6000){const out=[];let i=0;while(i<t.length){let j=Math.min(t.length,i+size);if(j<t.length){const k=t.lastIndexOf('\n',j);if(k>i+size*0.6)j=k;}out.push(t.slice(i,j));i=j;}return out;}
-async function ask(eng,system,user,onTok,maxTokens=400){
-  const stream=await eng.chat.completions.create({messages:[{role:'system',content:system},{role:'user',content:user}],stream:true,temperature:0.2,max_tokens:maxTokens});
-  let acc='';for await(const ch of stream){acc+=ch.choices[0]?.delta?.content||'';onTok&&onTok(acc);}return acc.trim();
+async function ask(eng,system,user,maxTokens){
+  const r=await eng.chat.completions.create({messages:[{role:'system',content:system},{role:'user',content:user}],temperature:0.2,max_tokens:maxTokens});
+  return (r.choices[0]?.message?.content||'').trim();
+}
+function groupSentences(sents,size=620){const out=[];let cur='';for(const s of sents){const t=s.length>size?s.slice(0,size):s;if(cur&&cur.length+t.length+1>size){out.push(cur);cur='';}cur+=(cur?' ':'')+t;}if(cur)out.push(cur);return out;}
+async function summarize(modelId){
+  const eng=await getEngine(modelId);
+  const text=pages.map(p=>p.text).join('\n');
+  const k=Math.max(8,Math.min(28,Math.round(text.length/1500)));
+  const groups=groupSentences(topSentences(text,k));
+  if(!groups.length)throw new Error('Not enough text to summarize.');
+  const bullets=[];
+  for(let i=0;i<groups.length;i++){
+    setStatus(`Writing key points ${i+1} / ${groups.length}…`,(i+0.5)/(groups.length+1));
+    const out=await ask(eng,'You rewrite excerpts as short bullet points. Use only the excerpt. Keep every number and date exact. No intro.',`Rewrite this as 1 to 3 short bullets, each starting with "- ":\n\n${groups[i]}`,110);
+    for(const ln of out.split('\n')){const t=ln.replace(/^[\s\-•*\d.)]+/,'').trim();if(t.length>12)bullets.push(t);}
+    summaryEl.textContent='• '+bullets.join('\n• ');
+  }
+  setStatus('Writing the one-line summary…',0.95);
+  const tl=await ask(eng,'You write one-sentence summaries. Use only the notes given. Keep numbers exact.',`Notes:\n${bullets.join(' ').slice(0,600)}\n\nWrite one sentence that says what this document is about.`,60);
+  summaryEl.textContent='TL;DR: '+tl.split('\n')[0]+'\n\n• '+bullets.join('\n• ');
 }
 $('#ai').onclick=async()=>{
-  sumPending=false;const btn=$('#ai');btn.disabled=true;summaryEl.className='';summaryEl.textContent='';
+  sumPending=false;const btn=$('#ai');btn.disabled=true;summaryEl.className='';summaryEl.textContent='Starting the AI model…';
+  const lost=e=>/disposed|device|lost|not loaded/i.test(e.message||'');
   try{
-    const eng=await getEngine(S.model);
-    const full=pages.map(p=>`[Page ${p.n}]\n${p.text}`).join('\n\n');let chunks=chunkText(full);const MAXC=14;
-    if(chunks.length>MAXC){const step=chunks.length/MAXC;chunks=Array.from({length:MAXC},(_,i)=>chunks[Math.floor(i*step)]);}
-    let notes;
-    if(chunks.length===1)notes=chunks[0];
-    else{const parts=[];
-      for(let i=0;i<chunks.length;i++){setStatus(`Reading section ${i+1} / ${chunks.length}…`,(i+1)/(chunks.length+1));summaryEl.textContent=`Reading section ${i+1} of ${chunks.length}…`;
-        parts.push(await ask(eng,'You extract facts from document excerpts. Be terse and accurate. Never invent anything.',`List the most important facts, figures, dates and decisions in this excerpt as short bullets (max 6):\n\n${chunks[i]}`,null,250));}
-      notes=parts.join('\n');}
-    setStatus('Writing summary…',0.95);
-    await ask(eng,'You summarize documents for a busy reader. Use only the provided text. Keep numbers exact. Do not invent facts.',
-      `Give a one-sentence TL;DR, then 5-8 key points as bullets (include important numbers, dates, risks or obligations).\n\nDocument:\n${notes}`,t=>{summaryEl.textContent=t;},500);
+    try{await summarize(S.model);}
+    catch(err){
+      engine=null;engineModel=null;
+      if(lost(err)&&S.model!==SMALL){summaryEl.textContent='That model was too heavy for this graphics card. Retrying with the smallest model…';await summarize(SMALL);}
+      else throw err;
+    }
     setStatus('Done.',1);aiText=summaryEl.textContent;
-  }catch(err){summaryEl.textContent='AI summary failed: '+err.message+'\n\n'+extractive(pages.map(p=>p.text).join('\n'));setStatus('',0);}
+  }catch(err){
+    engine=null;engineModel=null;
+    const why=lost(err)?'The graphics card stopped responding while running the AI model. Close and reopen the app, then try the smallest model in Settings.':err.message;
+    summaryEl.textContent='AI summary failed: '+why+'\n\n'+extractive(pages.map(p=>p.text).join('\n'));setStatus('',0);
+  }
   btn.disabled=false;btn.textContent='Summarize again';
 };
 
