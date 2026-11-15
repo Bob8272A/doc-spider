@@ -268,7 +268,7 @@ function applySettings(){
 }
 function bindSettings(){
   for(const [id,k] of [['#o-theme','theme'],['#o-accent','accent'],['#o-mode','mode'],['#o-layout','layout'],['#o-bg','bg']])
-    $(id).onclick=e=>{const v=e.target.dataset.v;if(v){S[k]=v;save();applySettings();}};
+    $(id).onclick=e=>{const v=e.target.dataset.v;if(v){const ch=S[k]!==v;S[k]=v;save();applySettings();if(k==='mode'&&ch&&items.length){stopTour();tour();}}};
   $('#t-fx').onclick=()=>{S.fx=!S.fx;save();applySettings();};
   $('#t-auto').onclick=()=>{S.auto=!S.auto;save();applySettings();};
   $('#speed').oninput=e=>{S.speed=parseFloat(e.target.value);save();applySettings();};
@@ -365,7 +365,7 @@ async function handleFile(f){
   if(!f)return;stopTour();spider.visible=false;const token=++docToken;
   if(f.size===0){summaryEl.className='empty';summaryEl.textContent='This file is empty (0 KB). The download probably failed, so download it again and retry.';return;}
   summaryEl.className='empty';summaryEl.textContent='Opening document…';
-  pagesEl.innerHTML='';$('#found').innerHTML='';items=[];pages=[];foundCount=0;aiText='';renderChips();updateCount();
+  tourMode=null;pagesEl.innerHTML='';$('#found').innerHTML='';items=[];pages=[];foundCount=0;aiText='';renderChips();updateCount();
   $('#ai').disabled=true;$('#tour').disabled=true;
   try{
     const lib=await loadPdfjs();pdf=await lib.getDocument({data:await f.arrayBuffer()}).promise;
@@ -562,7 +562,7 @@ function drawSpider(){
 requestAnimationFrame(frame);
 
 // ---------- tour ----------
-let touring=false,tourToken=0;
+let touring=false,tourToken=0,tourMode=null;
 const KEYS=/\b(approved|authoriz|total|net |revenue|increase|decrease|decline|risk|deadline|due|must|required|expire|penalt|fee|effective|terminat|material|loss|profit|guidance|repurchase|dividend|liabilit|obligation|shall|agree)/i;
 function scoreItem(it){
   let sc={amount:4,percent:3,date:2,contact:0.5}[it.type]||1;
@@ -579,17 +579,19 @@ function targets(){
   }
   return list;
 }
-async function walkTo(it,flash=true){
+async function walkTo(it,flash=true,token=null){
   const el=it.els[0];
   if(!spider.visible){const c=contentPoint(el);placeSpider(c.x-80,Math.max(0,c.y-260));}
   // re-aim once on arrival: lazy page layout can shift while travelling
   let c=contentPoint(el);await moveTo(c.x,c.y-3);
   c=contentPoint(el);if(Math.hypot(c.x-spider.x,c.y-3-spider.y)>6)await moveTo(c.x,c.y-3);
+  if(token!==null&&token!==tourToken)return;
   markFound(it);
   if(flash){it.els.forEach(e=>e.classList.add('flash'));setTimeout(()=>it.els.forEach(e=>e.classList.remove('flash')),700);}
 }
 async function tour(){
   if(!items.length)return;
+  if(tourMode!==S.mode){resetFound();tourMode=S.mode;}
   let list=targets().filter(i=>!i.found);
   if(!list.length){resetFound();list=targets();}
   if(!list.length)return;
@@ -597,7 +599,7 @@ async function tour(){
   if(!spider.visible){const p0=pages[list[0].page-1].el;placeSpider(p0.offsetLeft+p0.clientWidth/2,Math.max(0,p0.offsetTop-40));reader.scrollTop=Math.max(0,p0.offsetTop-40);}
   for(const it of list){
     if(token!==tourToken)return;
-    await walkTo(it,false);
+    await walkTo(it,false,token);
     if(token!==tourToken)return;
     await wait(150/S.speed);
   }
