@@ -307,11 +307,12 @@ async function extractPdf(buf){
 }
 async function handleFile(f){
   if(!f) return; stopTour();
+  if(f.size===0){ summaryEl.className='empty'; summaryEl.textContent='This file is empty (0 KB). The download probably failed, so download it again and retry.'; setStatus('',0); return; }
   summaryEl.className='empty'; summaryEl.textContent='Reading document…';
   try{ pages = f.name.toLowerCase().endsWith('.pdf') ? await extractPdf(await f.arrayBuffer()) : [{n:1,text:await f.text()}]; }
   catch(err){ summaryEl.textContent='Could not read that file: '+err.message; setStatus('',0); return; }
   const total=pages.reduce((a,p)=>a+p.text.length,0);
-  if(total<50){ summaryEl.textContent='No text found. This looks like a scanned PDF (needs OCR, not supported yet).'; setStatus('',0); return; }
+  if(total<50){ summaryEl.textContent='No readable text found. This is probably a scanned PDF (needs OCR, not supported yet), or the file is damaged.'; setStatus('',0); return; }
   renderReader(); renderFound();
   setStatus(`${pages.length} page(s), ${total.toLocaleString()} characters`,0);
   $('#ai').disabled=false; $('#tour').disabled=false; window._aiText='';
