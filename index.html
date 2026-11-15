@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark" data-fx="on" data-accent="cyan">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0a0d1a">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Doc Spider</title>
+<style>
+  :root{
+    --bg:#070a16; --bg2:#0d1224; --glass:rgba(255,255,255,.055); --glass2:rgba(255,255,255,.09);
+    --line:rgba(255,255,255,.12); --text:#e9eeff; --mute:#8d97b8;
+    --accent:#22d3ee; --accent2:#a78bfa; --on-accent:#031317;
+    --amount:#fbbf24; --percent:#f472b6; --date:#60a5fa; --contact:#c084fc;
+    --blur:18px; --travel:.55s;
+  }
+  [data-accent=green]{--accent:#4ade80;--accent2:#22d3ee;--on-accent:#04180b}
+  [data-accent=cyan]{--accent:#22d3ee;--accent2:#a78bfa;--on-accent:#031317}
+  [data-accent=purple]{--accent:#a78bfa;--accent2:#f472b6;--on-accent:#0f0828}
+  [data-accent=orange]{--accent:#fb923c;--accent2:#f472b6;--on-accent:#1f0d02}
+  [data-accent=red]{--accent:#fb7185;--accent2:#fbbf24;--on-accent:#250309}
+  [data-theme=light]{
+    --bg:#eef1fb; --bg2:#e1e7f8; --glass:rgba(255,255,255,.65); --glass2:rgba(255,255,255,.9);
+    --line:rgba(20,30,70,.16); --text:#141a33; --mute:#56608a;
+    --amount:#b45309; --percent:#be185d; --date:#1d4ed8; --contact:#7e22ce; --on-accent:#fff;
+  }
+  [data-theme=light][data-accent=cyan]{--accent:#0891b2}
+  [data-theme=light][data-accent=green]{--accent:#16a34a}
+  [data-theme=light][data-accent=purple]{--accent:#7c3aed}
+  [data-theme=light][data-accent=orange]{--accent:#ea580c}
+  [data-theme=light][data-accent=red]{--accent:#e11d48}
+  [data-theme=contrast]{
+    --bg:#000; --bg2:#000; --glass:#000; --glass2:#111; --line:#fff; --text:#fff; --mute:#d6d6d6;
+    --amount:#ffd400; --percent:#ff5fd0; --date:#5bc8ff; --contact:#d6a0ff; --on-accent:#000; --blur:0px;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;color:var(--text);font:15px/1.55 "Segoe UI",system-ui,-apple-system,Roboto,sans-serif;background:var(--bg);overflow:hidden}
+  /* animated holographic backdrop */
+  #bg{position:fixed;inset:0;z-index:0;overflow:hidden;
+      background:radial-gradient(1200px 700px at 15% -10%,color-mix(in srgb,var(--accent2) 28%,transparent),transparent 60%),
+                 radial-gradient(900px 600px at 95% 10%,color-mix(in srgb,var(--accent) 22%,transparent),transparent 55%),
+                 linear-gradient(180deg,var(--bg),var(--bg2))}
+  [data-theme=contrast] #bg{background:#000}
+  #bg i{position:absolute;border-radius:50%;filter:blur(70px);opacity:.45;animation:drift 22s ease-in-out infinite alternate}
+  #bg i:nth-child(1){width:420px;height:420px;left:8%;top:55%;background:var(--accent2)}
+  #bg i:nth-child(2){width:360px;height:360px;right:6%;top:62%;background:var(--accent);animation-delay:-9s}
+  @keyframes drift{to{transform:translate(60px,-50px) scale(1.15)}}
+  [data-fx=off] #bg i,[data-theme=contrast] #bg i{display:none}
+  #grid{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.07;
+        background-image:linear-gradient(var(--text) 1px,transparent 1px),linear-gradient(90deg,var(--text) 1px,transparent 1px);background-size:44px 44px;
+        mask-image:radial-gradient(ellipse at 50% 30%,#000,transparent 75%)}
+  [data-fx=off] #grid,[data-theme=contrast] #grid{display:none}
+  #scan{position:fixed;inset:0;z-index:60;pointer-events:none;opacity:.05;
+        background:repeating-linear-gradient(0deg,#fff 0 1px,transparent 1px 3px)}
+  [data-fx=off] #scan,[data-theme=light] #scan,[data-theme=contrast] #scan{display:none}
+
+  .app{position:relative;z-index:1;height:100vh;display:flex;flex-direction:column}
+  header{display:flex;align-items:center;gap:14px;padding:12px 20px;margin:14px 16px 0;border:1px solid var(--line);border-radius:16px;
+         background:var(--glass);backdrop-filter:blur(var(--blur));-webkit-backdrop-filter:blur(var(--blur))}
+  .logo{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:.5px}
+  .logo b{background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent;font-size:18px}
+  [data-theme=contrast] .logo b{color:var(--accent);background:none}
+  .logo span.orb{width:26px;height:26px;border-radius:50%;background:conic-gradient(from 0deg,var(--accent),var(--accent2),var(--accent));display:grid;place-items:center;font-size:14px}
+  [data-fx=on] .logo span.orb{animation:spin 9s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .sp{flex:1}
+  button,select,input{font:inherit;color:inherit}
+  .btn{background:var(--glass);border:1px solid var(--line);border-radius:12px;padding:8px 14px;cursor:pointer;transition:.18s;backdrop-filter:blur(8px)}
+  .btn:hover{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 20%,transparent)}
+  .btn.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:var(--on-accent);border-color:transparent;font-weight:700}
+  [data-theme=contrast] .btn.primary{background:var(--accent);outline:2px solid #fff}
+  .btn:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
+  .btn.icon{padding:8px 11px}
+  [data-theme=contrast] .btn{border-width:2px}
+
+  main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:16px;padding:16px}
+  @media(max-width:920px){main{grid-template-columns:1fr;overflow:auto} body{overflow:auto}.app{height:auto}}
+  .glass{border:1px solid var(--line);border-radius:18px;background:var(--glass);backdrop-filter:blur(var(--blur));-webkit-backdrop-filter:blur(var(--blur));
+         box-shadow:0 10px 40px rgba(0,0,0,.25)}
+  [data-theme=light] .glass{box-shadow:0 10px 30px rgba(40,60,120,.12)}
+  #reader{overflow:auto;padding:22px;position:relative;scroll-behavior:smooth}
+  #side{display:flex;flex-direction:column;min-height:0;overflow:hidden}
+  #drop{border:1.5px dashed var(--line);border-radius:20px;padding:70px 24px;text-align:center;color:var(--mute);margin:6vh auto;max-width:560px;cursor:pointer;transition:.2s}
+  #drop:hover,#drop.over{border-color:var(--accent);color:var(--text);background:color-mix(in srgb,var(--accent) 7%,transparent)}
+  #drop .big{font-size:42px;display:block;margin-bottom:8px}
+  #drop b{color:var(--text);font-size:18px}
+  .page{border:1px solid var(--line);border-radius:14px;padding:18px 22px;margin:0 auto 16px;max-width:840px;white-space:pre-wrap;word-wrap:break-word;background:color-mix(in srgb,var(--glass) 70%,transparent)}
+  .page .pn{display:block;color:var(--mute);font-size:11px;margin-bottom:8px;letter-spacing:1.4px;text-transform:uppercase}
+  mark{border-radius:5px;padding:0 3px;color:inherit;cursor:pointer;transition:.2s}
+  mark.amount{background:color-mix(in srgb,var(--amount) 24%,transparent);box-shadow:inset 0 -2px 0 var(--amount)}
+  mark.percent{background:color-mix(in srgb,var(--percent) 24%,transparent);box-shadow:inset 0 -2px 0 var(--percent)}
+  mark.date{background:color-mix(in srgb,var(--date) 24%,transparent);box-shadow:inset 0 -2px 0 var(--date)}
+  mark.contact{background:color-mix(in srgb,var(--contact) 24%,transparent);box-shadow:inset 0 -2px 0 var(--contact)}
+  mark.flash{background:color-mix(in srgb,var(--accent) 55%,transparent) !important;box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 55%,transparent),0 0 24px var(--accent) !important}
+  mark.hide{background:none !important;box-shadow:none !important}
+  .sec{padding:16px 18px;border-bottom:1px solid var(--line)}
+  .sec h2{margin:0 0 10px;font-size:11px;letter-spacing:1.6px;text-transform:uppercase;color:var(--mute);font-weight:700;display:flex;gap:8px;align-items:center}
+  .sec h2::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 10px var(--accent)}
+  #summary{white-space:pre-wrap;font-size:14px;max-height:34vh;overflow:auto}
+  #summary.empty{color:var(--mute)}
+  .bar{height:5px;background:var(--line);border-radius:3px;overflow:hidden;margin:10px 0 4px}
+  .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .2s;box-shadow:0 0 12px var(--accent)}
+  #status{font-size:12px;color:var(--mute);min-height:18px}
+  .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .chips{display:flex;gap:6px;flex-wrap:wrap}
+  .chip{font-size:12px;padding:3px 11px;border-radius:999px;border:1px solid var(--line);cursor:pointer;user-select:none;background:var(--glass)}
+  .chip.on{border-color:var(--accent);color:var(--accent);box-shadow:0 0 10px color-mix(in srgb,var(--accent) 30%,transparent)}
+  #found{overflow:auto;flex:1;min-height:120px}
+  .it{display:flex;gap:8px;align-items:baseline;padding:7px 18px;border-bottom:1px solid var(--line);cursor:pointer;font-size:13px;transition:.15s}
+  .it:hover{background:var(--glass2)}
+  .it .t{font-size:10px;text-transform:uppercase;letter-spacing:.8px;min-width:54px;font-weight:700}
+  .it .t.amount{color:var(--amount)} .it .t.percent{color:var(--percent)} .it .t.date{color:var(--date)} .it .t.contact{color:var(--contact)}
+  .it .v{font-weight:650}
+  .it .c{color:var(--mute);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+  .it .p{color:var(--mute);font-size:11px}
+  .note{font-size:11px;color:var(--mute);padding:10px 18px}
+
+  #spider{position:fixed;left:0;top:0;z-index:50;pointer-events:none;font-size:22px;transition:transform var(--travel) cubic-bezier(.5,0,.2,1),opacity .3s;opacity:0;filter:drop-shadow(0 0 8px var(--accent))}
+  #web{position:fixed;inset:0;z-index:49;pointer-events:none}
+  #tip{position:fixed;left:0;top:0;z-index:51;pointer-events:none;max-width:250px;background:color-mix(in srgb,var(--bg) 88%,transparent);border:1px solid var(--accent);color:var(--text);font-size:12px;padding:5px 10px;border-radius:10px;opacity:0;transition:opacity .25s,transform var(--travel) cubic-bezier(.5,0,.2,1);backdrop-filter:blur(8px)}
+
+  /* settings drawer */
+  #scrim{position:fixed;inset:0;z-index:70;background:rgba(0,0,0,.45);opacity:0;pointer-events:none;transition:.25s}
+  #scrim.open{opacity:1;pointer-events:auto}
+  #drawer{position:fixed;top:0;right:0;bottom:0;width:min(380px,100vw);z-index:71;transform:translateX(105%);transition:transform .3s cubic-bezier(.3,.8,.3,1);overflow:auto;border-radius:22px 0 0 22px;
+          background:color-mix(in srgb,var(--bg2) 88%,transparent);border-left:1px solid var(--line);backdrop-filter:blur(26px);-webkit-backdrop-filter:blur(26px);padding:18px 20px}
+  [data-theme=light] #drawer{background:rgba(250,252,255,.94)}
+  [data-theme=contrast] #drawer{background:#000;border-left:2px solid #fff}
+  #drawer.open{transform:none}
+  #drawer h3{margin:0 0 14px;font-size:18px}
+  .grp{margin:18px 0 6px;font-size:11px;letter-spacing:1.6px;text-transform:uppercase;color:var(--mute);font-weight:700}
+  .opts{display:flex;gap:8px;flex-wrap:wrap}
+  .opt{padding:7px 14px;border-radius:12px;border:1px solid var(--line);cursor:pointer;background:var(--glass);user-select:none;font-size:13px}
+  .opt.on{border-color:var(--accent);color:var(--accent);box-shadow:0 0 12px color-mix(in srgb,var(--accent) 30%,transparent)}
+  .sw{width:30px;height:30px;border-radius:50%;border:2px solid transparent;cursor:pointer}
+  .sw.on{border-color:var(--text);box-shadow:0 0 12px currentColor}
+  .line{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:8px 0}
+  .tog{width:44px;height:24px;border-radius:999px;background:var(--line);position:relative;cursor:pointer;transition:.2s;flex:none}
+  .tog::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:.2s}
+  .tog.on{background:var(--accent)} .tog.on::after{left:23px}
+  input[type=range]{width:100%;accent-color:var(--accent)}
+  select{background:var(--glass);border:1px solid var(--line);border-radius:10px;padding:8px 10px;width:100%}
+  select option{color:#000}
+  .hint{font-size:12px;color:var(--mute);margin-top:4px}
+  #installBtn{display:none}
+</style>
+</head>
+<body>
+<div id="bg"><i></i><i></i></div><div id="grid"></div><div id="scan"></div>
+
+<div class="app">
+<header>
+  <div class="logo"><span class="orb">🕷️</span><b>DOC SPIDER</b></div>
+  <span class="sp"></span>
+  <button class="btn" id="installBtn">⬇ Install app</button>
+  <button class="btn" id="open">Open file…</button>
+  <button class="btn icon" id="gear" title="Settings" aria-label="Settings">⚙</button>
+  <input id="file" type="file" accept=".pdf,.txt,.md" hidden>
+</header>
+<main>
+  <section id="reader" class="glass">
+    <div id="drop"><span class="big">⬡</span><b>Drop a PDF here</b><br>or click to choose a file<br><br>Runs entirely in your browser. Your document never leaves this device.</div>
+  </section>
+  <aside id="side" class="glass">
+    <div class="sec">
+      <h2>Key points</h2>
+      <div id="summary" class="empty">Upload a document to get a summary.</div>
+      <div class="bar"><i id="barfill"></i></div>
+      <div id="status"></div>
+      <div class="row">
+        <button id="ai" class="btn primary" disabled>Summarize with AI</button>
+        <button id="tour" class="btn" disabled>🕷️ Send spider</button>
+      </div>
+    </div>
+    <div class="sec" style="padding-bottom:10px">
+      <h2>Found <span id="count"></span></h2>
+      <div class="chips" id="chips"></div>
+    </div>
+    <div id="found"></div>
+    <div class="note">First AI run downloads the model once, then it is cached. Needs Chrome or Edge with WebGPU.</div>
+  </aside>
+</main>
+</div>
+
+<svg id="web"></svg>
+<div id="spider">🕷️</div>
+<div id="tip"></div>
+
+<div id="scrim"></div>
+<aside id="drawer" aria-label="Settings">
+  <div class="line"><h3>Settings</h3><button class="btn icon" id="closeSet">✕</button></div>
+
+  <div class="grp">Theme</div>
+  <div class="opts" id="o-theme">
+    <span class="opt" data-v="dark">Dark</span><span class="opt" data-v="light">Light</span><span class="opt" data-v="contrast">High contrast</span>
+  </div>
+  <div class="grp">Accent color</div>
+  <div class="opts" id="o-accent">
+    <span class="sw" data-v="cyan" style="background:#22d3ee;color:#22d3ee"></span>
+    <span class="sw" data-v="green" style="background:#4ade80;color:#4ade80"></span>
+    <span class="sw" data-v="purple" style="background:#a78bfa;color:#a78bfa"></span>
+    <span class="sw" data-v="orange" style="background:#fb923c;color:#fb923c"></span>
+    <span class="sw" data-v="red" style="background:#fb7185;color:#fb7185"></span>
+  </div>
+  <div class="line" style="margin-top:14px"><span>Effects (glow, scanlines, motion)</span><span class="tog" id="t-fx"></span></div>
+
+  <div class="grp">Spider</div>
+  <div class="opts" id="o-mode">
+    <span class="opt" data-v="smart">Smart — key items</span><span class="opt" data-v="numbers">Numbers only</span>
+  </div>
+  <div class="hint" id="modeHint"></div>
+  <div class="line" style="margin-top:12px"><span>Crawl speed</span><span id="speedLbl">1.0×</span></div>
+  <input type="range" id="speed" min="0.5" max="3" step="0.25" value="1">
+  <div class="line"><span>Start automatically after upload</span><span class="tog" id="t-auto"></span></div>
+
+  <div class="grp">AI model</div>
+  <select id="model">
+    <option value="Qwen2.5-1.5B-Instruct-q4f16_1-MLC">Qwen2.5 1.5B — balanced (~1 GB)</option>
+    <option value="Qwen2.5-0.5B-Instruct-q4f16_1-MLC">Qwen2.5 0.5B — fastest, weakest</option>
+    <option value="Qwen2.5-3B-Instruct-q4f16_1-MLC">Qwen2.5 3B — best quality (~2 GB)</option>
+  </select>
+  <div class="hint">Changing the model downloads it the first time you summarize.</div>
+  <div class="grp">About</div>
+  <div class="hint">Everything runs locally in your browser. No uploads, no accounts.</div>
+</aside>
+
+<script type="module">
+const PDFJS = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/';
+const WEBLLM = 'https://esm.run/@mlc-ai/web-llm';
+const $ = s => document.querySelector(s);
+const root = document.documentElement;
+const reader = $('#reader'), summaryEl = $('#summary'), statusEl = $('#status'), bar = $('#barfill');
+
+// ---------- settings (persisted) ----------
+const DEFAULTS = {theme:'dark', accent:'cyan', fx:true, mode:'smart', speed:1, auto:true, model:'Qwen2.5-1.5B-Instruct-q4f16_1-MLC'};
+let S = {...DEFAULTS};
+try{ Object.assign(S, JSON.parse(localStorage.getItem('docspider.settings')||'{}')); }catch(e){}
+const save = ()=>{ try{ localStorage.setItem('docspider.settings', JSON.stringify(S)); }catch(e){} };
+const MODE_HINT = {smart:'Visits the ~10 most important items (big amounts, key dates, anything in the summary) with a label for each.',
+                   numbers:'Sweeps through every dollar amount and percentage in the document, in order.'};
+function applySettings(){
+  root.dataset.theme=S.theme; root.dataset.accent=S.accent; root.dataset.fx=S.fx?'on':'off';
+  root.style.setProperty('--travel',(0.55/S.speed).toFixed(2)+'s');
+  document.querySelectorAll('#o-theme .opt').forEach(e=>e.classList.toggle('on',e.dataset.v===S.theme));
+  document.querySelectorAll('#o-accent .sw').forEach(e=>e.classList.toggle('on',e.dataset.v===S.accent));
+  document.querySelectorAll('#o-mode .opt').forEach(e=>e.classList.toggle('on',e.dataset.v===S.mode));
+  $('#t-fx').classList.toggle('on',S.fx); $('#t-auto').classList.toggle('on',S.auto);
+  $('#speed').value=S.speed; $('#speedLbl').textContent=S.speed.toFixed(2).replace(/0$/,'')+'×';
+  $('#model').value=S.model; $('#modeHint').textContent=MODE_HINT[S.mode];
+  const tc=document.querySelector('meta[name=theme-color]'); if(tc) tc.content = S.theme==='light'?'#eef1fb':(S.theme==='contrast'?'#000':'#0a0d1a');
+}
+function bindSettings(){
+  $('#o-theme').onclick=e=>{const v=e.target.dataset.v; if(v){S.theme=v;save();applySettings();}};
+  $('#o-accent').onclick=e=>{const v=e.target.dataset.v; if(v){S.accent=v;save();applySettings();}};
+  $('#o-mode').onclick=e=>{const v=e.target.dataset.v; if(v){S.mode=v;save();applySettings();}};
+  $('#t-fx').onclick=()=>{S.fx=!S.fx;save();applySettings();};
+  $('#t-auto').onclick=()=>{S.auto=!S.auto;save();applySettings();};
+  $('#speed').oninput=e=>{S.speed=parseFloat(e.target.value);save();applySettings();};
+  $('#model').onchange=e=>{S.model=e.target.value;save();};
+  const open=v=>{$('#drawer').classList.toggle('open',v);$('#scrim').classList.toggle('open',v);};
+  $('#gear').onclick=()=>open(true); $('#closeSet').onclick=()=>open(false); $('#scrim').onclick=()=>open(false);
+  document.addEventListener('keydown',e=>{if(e.key==='Escape')open(false);});
+}
+applySettings(); bindSettings();
+
+// ---------- state ----------
+let pages=[], items=[], activeTypes=new Set(['amount','percent','date','contact']);
+let engine=null, engineModel=null;
+
+// ---------- detectors ----------
+const MONTH='(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\\.?';
+const DETECTORS=[
+  {type:'contact', re:/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|https?:\/\/[^\s)]*[^\s).,;]/g},
+  {type:'date', re:new RegExp(`\\b${MONTH}\\s+\\d{1,2}(?:st|nd|rd|th)?,?\\s+\\d{4}\\b|\\b\\d{1,2}\\s+${MONTH}\\s+\\d{4}\\b|\\b${MONTH}\\s+\\d{4}\\b|\\b\\d{1,2}[\\/.-]\\d{1,2}[\\/.-]\\d{2,4}\\b|\\b\\d{4}-\\d{2}-\\d{2}\\b`,'g')},
+  {type:'amount', re:/(?:[$€£¥]\s?\d[\d,]*(?:\.\d+)?(?:\s?(?:thousand|million|billion|trillion|[KMBT]n?)\b)?)|(?:\b\d[\d,]*(?:\.\d+)?\s?(?:thousand|million|billion|trillion)\b(?:\s(?:dollars|USD|EUR))?)/gi},
+  {type:'percent', re:/\b\d+(?:\.\d+)?\s?(?:%|percent\b|basis points\b|bps\b)/gi},
+];
+function detect(text){
+  const hits=[];
+  for(const d of DETECTORS){ d.re.lastIndex=0; let m; while((m=d.re.exec(text))){ hits.push({type:d.type,s:m.index,e:m.index+m[0].length,v:m[0]}); if(m[0].length===0) d.re.lastIndex++; } }
+  hits.sort((a,b)=>a.s-b.s||(b.e-b.s)-(a.e-a.s));
+  const out=[]; let end=-1; for(const h of hits){ if(h.s>=end){out.push(h);end=h.e;} } return out;
+}
+const esc=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+// ---------- file loading ----------
+async function loadPdfjs(){
+  if(window._pdfjs) return window._pdfjs;
+  const lib=await import(PDFJS+'pdf.min.mjs');
+  try{ const code=await (await fetch(PDFJS+'pdf.worker.min.mjs')).text();
+       lib.GlobalWorkerOptions.workerSrc=URL.createObjectURL(new Blob([code],{type:'text/javascript'})); }
+  catch(e){ lib.GlobalWorkerOptions.workerSrc=PDFJS+'pdf.worker.min.mjs'; }
+  window._pdfjs=lib; return lib;
+}
+async function extractPdf(buf){
+  const lib=await loadPdfjs(); const pdf=await lib.getDocument({data:buf}).promise; const out=[];
+  for(let i=1;i<=pdf.numPages;i++){
+    setStatus(`Reading page ${i} / ${pdf.numPages}…`, i/pdf.numPages);
+    const tc=await (await pdf.getPage(i)).getTextContent(); let t='';
+    for(const it of tc.items){ t+=it.str; t+=it.hasEOL?'\n':(it.str&&!it.str.endsWith(' ')?' ':''); }
+    out.push({n:i,text:t.replace(/[ \t]+\n/g,'\n').replace(/\n{3,}/g,'\n\n').trim()});
+  }
+  return out;
+}
+async function handleFile(f){
+  if(!f) return; stopTour();
+  summaryEl.className='empty'; summaryEl.textContent='Reading document…';
+  try{ pages = f.name.toLowerCase().endsWith('.pdf') ? await extractPdf(await f.arrayBuffer()) : [{n:1,text:await f.text()}]; }
+  catch(err){ summaryEl.textContent='Could not read that file: '+err.message; setStatus('',0); return; }
+  const total=pages.reduce((a,p)=>a+p.text.length,0);
+  if(total<50){ summaryEl.textContent='No text found. This looks like a scanned PDF (needs OCR, not supported yet).'; setStatus('',0); return; }
+  renderReader(); renderFound();
+  setStatus(`${pages.length} page(s), ${total.toLocaleString()} characters`,0);
+  $('#ai').disabled=false; $('#tour').disabled=false; window._aiText='';
+  summaryEl.className=''; summaryEl.textContent=extractive(pages.map(p=>p.text).join('\n'));
+  $('#ai').textContent='Summarize with AI';
+  if(S.auto) setTimeout(()=>tour(''),900);
+}
+function setStatus(msg,frac){ statusEl.textContent=msg; bar.style.width=(Math.max(0,Math.min(1,frac||0))*100)+'%'; }
+
+// ---------- reader + found ----------
+function renderReader(){
+  items=[]; let id=0; const frag=[];
+  for(const p of pages){
+    const hits=detect(p.text); let html='', last=0;
+    for(const h of hits){
+      html+=esc(p.text.slice(last,h.s)); const myId=id++;
+      html+=`<mark class="${h.type}" data-id="${myId}">${esc(h.v)}</mark>`;
+      const ctx=p.text.slice(Math.max(0,h.s-45),h.s).replace(/\s+/g,' ')+'…'+p.text.slice(h.e,h.e+45).replace(/\s+/g,' ');
+      items.push({id:myId,type:h.type,v:h.v.trim(),page:p.n,ctx}); last=h.e;
+    }
+    html+=esc(p.text.slice(last));
+    frag.push(`<div class="page" id="pg${p.n}"><span class="pn">Page ${p.n}</span>${html}</div>`);
+  }
+  reader.innerHTML=frag.join(''); reader.scrollTop=0;
+  reader.querySelectorAll('mark').forEach(m=>m.addEventListener('click',()=>{stopTour();crawlTo(m);}));
+}
+function renderFound(){
+  const counts={}; items.forEach(i=>counts[i.type]=(counts[i.type]||0)+1);
+  $('#chips').innerHTML=['amount','percent','date','contact'].map(t=>`<span class="chip ${activeTypes.has(t)?'on':''}" data-t="${t}">${t} ${counts[t]||0}</span>`).join('');
+  $('#chips').querySelectorAll('.chip').forEach(c=>c.onclick=()=>{const t=c.dataset.t; activeTypes.has(t)?activeTypes.delete(t):activeTypes.add(t); renderFound(); applyFilter();});
+  const vis=items.filter(i=>activeTypes.has(i.type));
+  $('#count').textContent=`— ${vis.length} of ${items.length}`;
+  $('#found').innerHTML=vis.map(i=>`<div class="it" data-id="${i.id}"><span class="t ${i.type}">${i.type}</span><span class="v">${esc(i.v)}</span><span class="c">${esc(i.ctx)}</span><span class="p">p.${i.page}</span></div>`).join('')||'<div class="note">Nothing detected.</div>';
+  $('#found').querySelectorAll('.it').forEach(el=>el.onclick=()=>{const m=reader.querySelector(`mark[data-id="${el.dataset.id}"]`); if(m){stopTour();crawlTo(m);}});
+}
+function applyFilter(){ reader.querySelectorAll('mark').forEach(m=>m.classList.toggle('hide',!activeTypes.has(m.className.split(' ')[0]))); }
+
+// ---------- spider ----------
+const spider=$('#spider'), web=$('#web'), tip=$('#tip'); let touring=false, tourToken=0, sx=innerWidth/2, sy=-40;
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+function crawlTo(el,caption){
+  return new Promise(res=>{
+    el.scrollIntoView({block:'center',behavior:S.fx?'smooth':'auto'});
+    setTimeout(()=>{
+      const r=el.getBoundingClientRect(); const tx=r.left+r.width/2-11, ty=r.top-6;
+      const line=document.createElementNS('http://www.w3.org/2000/svg','line');
+      line.setAttribute('x1',sx+11); line.setAttribute('y1',sy+14); line.setAttribute('x2',tx+11); line.setAttribute('y2',ty+14);
+      line.setAttribute('stroke','currentColor'); line.style.color=getComputedStyle(root).getPropertyValue('--accent'); line.setAttribute('stroke-width','1'); line.setAttribute('opacity','.7');
+      web.appendChild(line); setTimeout(()=>{line.style.transition='opacity 1s'; line.setAttribute('opacity','0'); setTimeout(()=>line.remove(),1000)},900/S.speed);
+      spider.style.opacity=1; spider.style.transform=`translate(${tx}px,${ty}px)`; sx=tx; sy=ty;
+      document.querySelectorAll('mark.flash').forEach(m=>m.classList.remove('flash'));
+      el.classList.add('flash'); setTimeout(()=>el.classList.remove('flash'),2200/S.speed);
+      if(caption){ tip.textContent=caption; tip.style.opacity=1; tip.style.transform=`translate(${Math.min(innerWidth-260,Math.max(8,r.left))}px,${r.bottom+8}px)`; } else tip.style.opacity=0;
+      clearTimeout(crawlTo.t); crawlTo.t=setTimeout(()=>{ if(!touring){spider.style.opacity=0; tip.style.opacity=0;} },2600);
+      setTimeout(res, 700/S.speed);
+    }, 350/S.speed);
+  });
+}
+spider.style.transform=`translate(${sx}px,${sy}px)`;
+
+// ---------- autonomous tour ----------
+const KEYS=/\b(approved|authoriz|total|net |revenue|increase|decrease|decline|risk|deadline|due|must|required|expire|penalt|fee|effective|terminat|material|loss|profit|guidance|repurchase|dividend|liabilit|obligation|shall|agree)/i;
+function scoreItem(it,ai){
+  let sc={amount:4,percent:3,date:2,contact:0.5}[it.type]||1;
+  if(it.type==='amount'){
+    const n=parseFloat(it.v.replace(/[^0-9.]/g,''))||0;
+    const mult=/trillion|T\b/i.test(it.v)?1e12:/billion|B\b/i.test(it.v)?1e9:/million|M\b/i.test(it.v)?1e6:/thousand|K\b/i.test(it.v)?1e3:1;
+    sc+=Math.min(4,Math.max(0,Math.log10(n*mult+1)-2)*0.7);
+  }
+  if(KEYS.test(it.ctx)) sc+=3; if(ai&&ai.includes(it.v.trim())) sc+=10; return sc;
+}
+function pickSmart(ai,n=10){
+  const seen=new Set(); const ranked=items.filter(i=>activeTypes.has(i.type)).map(i=>({i,s:scoreItem(i,ai)})).sort((a,b)=>b.s-a.s); const pick=[];
+  for(const r of ranked){ const k=r.i.v.toLowerCase().replace(/\s/g,''); if(seen.has(k)) continue; seen.add(k); pick.push(r.i); if(pick.length>=n) break; }
+  return pick.sort((a,b)=>a.id-b.id);
+}
+const pickNumbers=()=>items.filter(i=>(i.type==='amount'||i.type==='percent')&&activeTypes.has(i.type)).slice(0,80);
+function why(it,ai){
+  if(ai&&ai.includes(it.v.trim())) return 'In the key points';
+  if(KEYS.test(it.ctx)) return 'Key '+it.type+' — '+(it.ctx.match(KEYS)||[''])[0].trim();
+  return {amount:'Big number',percent:'Notable rate',date:'Important date',contact:'Contact'}[it.type];
+}
+async function tour(ai=''){
+  if(!items.length) return; const token=++tourToken; touring=true; $('#tour').textContent='⏹ Stop spider';
+  const numbers=S.mode==='numbers'; const list=numbers?pickNumbers():pickSmart(ai);
+  for(const it of list){
+    if(token!==tourToken) break;
+    const m=reader.querySelector(`mark[data-id="${it.id}"]`); if(!m) continue;
+    await crawlTo(m, numbers?null:why(it,ai));
+    await wait((numbers?500:1800)/S.speed);
+  }
+  if(token===tourToken){ touring=false; spider.style.opacity=0; tip.style.opacity=0; $('#tour').textContent='🕷️ Send spider'; }
+}
+function stopTour(){ tourToken++; touring=false; spider.style.opacity=0; tip.style.opacity=0; $('#tour').textContent='🕷️ Send spider'; }
+$('#tour').onclick=()=>touring?stopTour():tour(window._aiText||'');
+
+// ---------- quick extractive summary ----------
+function extractive(text,k=6){
+  const sents=text.replace(/\s+/g,' ').split(/(?<=[.!?])\s+(?=[A-Z"(\[])/).map(x=>x.trim()).filter(x=>x.length>=40&&x.length<=300);
+  if(!sents.length) return text.slice(0,600);
+  const stop=new Set('the a an and or of to in for on with as by is are was were be been that this it its at from which will may our we their they not have has had can'.split(' '));
+  const freq={}; sents.forEach(s=>s.toLowerCase().match(/[a-z]{3,}/g)?.forEach(w=>{if(!stop.has(w)) freq[w]=(freq[w]||0)+1;}));
+  const scored=sents.map((s,i)=>{const ws=s.toLowerCase().match(/[a-z]{3,}/g)||[]; let sc=0; ws.forEach(w=>sc+=freq[w]||0); sc=sc/Math.sqrt(ws.length||1); if(/\d/.test(s)) sc*=1.15; return {s:s.trim(),i,sc};}).sort((a,b)=>b.sc-a.sc).slice(0,k).sort((a,b)=>a.i-b.i);
+  return '• '+scored.map(x=>x.s).join('\n• ')+'\n\n(Quick extract — press “Summarize with AI” for a real summary.)';
+}
+
+// ---------- in-browser LLM ----------
+async function getEngine(modelId){
+  if(engine&&engineModel===modelId) return engine;
+  if(!navigator.gpu) throw new Error('WebGPU is not available. Use a recent Chrome or Edge, or keep the quick extract.');
+  setStatus('Loading AI library…',0.02);
+  const webllm=await import(WEBLLM);
+  engine=await webllm.CreateMLCEngine(modelId,{initProgressCallback:p=>setStatus(p.text.slice(0,90),p.progress)});
+  engineModel=modelId; return engine;
+}
+function chunkText(t,size=6000){ const out=[]; let i=0; while(i<t.length){ let j=Math.min(t.length,i+size); if(j<t.length){const k=t.lastIndexOf('\n',j); if(k>i+size*0.6) j=k;} out.push(t.slice(i,j)); i=j; } return out; }
+async function ask(eng,system,user,onTok,maxTokens=400){
+  const stream=await eng.chat.completions.create({messages:[{role:'system',content:system},{role:'user',content:user}],stream:true,temperature:0.2,max_tokens:maxTokens});
+  let acc=''; for await(const ch of stream){ acc+=ch.choices[0]?.delta?.content||''; onTok&&onTok(acc); } return acc.trim();
+}
+$('#ai').onclick=async()=>{
+  stopTour(); const btn=$('#ai'); btn.disabled=true; summaryEl.className=''; summaryEl.textContent='';
+  try{
+    const eng=await getEngine(S.model);
+    const full=pages.map(p=>`[Page ${p.n}]\n${p.text}`).join('\n\n'); let chunks=chunkText(full); const MAXC=14;
+    if(chunks.length>MAXC){ const step=chunks.length/MAXC; chunks=Array.from({length:MAXC},(_,i)=>chunks[Math.floor(i*step)]); }
+    let notes;
+    if(chunks.length===1) notes=chunks[0];
+    else{
+      const parts=[];
+      for(let i=0;i<chunks.length;i++){
+        setStatus(`Reading section ${i+1} / ${chunks.length}…`,(i+1)/(chunks.length+1)); summaryEl.textContent=`Reading section ${i+1} of ${chunks.length}…`;
+        parts.push(await ask(eng,'You extract facts from document excerpts. Be terse and accurate. Never invent anything.',`List the most important facts, figures, dates and decisions in this excerpt as short bullets (max 6):\n\n${chunks[i]}`,null,250));
+      }
+      notes=parts.join('\n');
+    }
+    setStatus('Writing summary…',0.95);
+    await ask(eng,'You summarize documents for a busy reader. Use only the provided text. Keep numbers exact. Do not invent facts.',
+      `Give a one-sentence TL;DR, then 5-8 key points as bullets (include important numbers, dates, risks or obligations).\n\nDocument:\n${notes}`,t=>{summaryEl.textContent=t;},500);
+    setStatus('Done.',1); window._aiText=summaryEl.textContent; if(S.auto) setTimeout(()=>tour(window._aiText),600);
+  }catch(err){
+    summaryEl.textContent='AI summary failed: '+err.message+'\n\n'+extractive(pages.map(p=>p.text).join('\n')); setStatus('',0);
+  }
+  btn.disabled=false; btn.textContent='Summarize again';
+};
+
+// ---------- wiring + install ----------
+$('#open').onclick=()=>$('#file').click(); $('#file').onchange=e=>handleFile(e.target.files[0]);
+const drop=$('#drop'); drop.onclick=()=>$('#file').click();
+['dragenter','dragover'].forEach(ev=>document.addEventListener(ev,e=>{e.preventDefault(); $('#drop')?.classList.add('over');}));
+['dragleave','drop'].forEach(ev=>document.addEventListener(ev,e=>{e.preventDefault(); $('#drop')?.classList.remove('over');}));
+document.addEventListener('drop',e=>handleFile(e.dataTransfer.files[0]));
+let deferred=null;
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault(); deferred=e; $('#installBtn').style.display='inline-block';});
+$('#installBtn').onclick=async()=>{ if(!deferred) return; deferred.prompt(); await deferred.userChoice; deferred=null; $('#installBtn').style.display='none'; };
+window.addEventListener('appinstalled',()=>{$('#installBtn').style.display='none';});
+if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('sw.js'); }catch(e){} }
+</script>
+</body>
+</html>
