@@ -499,12 +499,15 @@ function moveTo(x,y){
   });
 }
 let lastT=performance.now();
-function frame(now){
-  const dt=Math.min(0.05,(now-lastT)/1000);lastT=now;
+function tick(now){
+  let rest=Math.min(2,(now-lastT)/1000);lastT=now;
+  if(spider.visible){while(rest>0){const dt=Math.min(0.05,rest);updateSpider(dt);rest-=dt;}}
   g.clearRect(0,0,innerWidth,innerHeight);
-  if(spider.visible){updateSpider(dt);drawSpider();}
-  requestAnimationFrame(frame);
+  if(spider.visible)drawSpider();
 }
+function frame(now){tick(now);requestAnimationFrame(frame);}
+// keeps the spider working when the window is in the background and animation frames are paused
+setInterval(()=>{const now=performance.now();if(now-lastT>200)tick(now);},100);
 function updateSpider(dt){
   const m=spider.move,px=spider.x,py=spider.y;
   if(m){
