@@ -226,6 +226,7 @@
   <div class="line" style="margin-top:12px"><span>Crawl speed</span><span id="speedLbl">1×</span></div>
   <input type="range" id="speed" min="0.5" max="3" step="0.25" value="1">
   <div class="line"><span>Start automatically after opening</span><span class="tog" id="t-auto"></span></div>
+  <div class="line"><span>Show quick summary before the spider finishes</span><span class="tog" id="t-sum"></span></div>
 
   <div class="grp">AI model</div>
   <select id="model">
@@ -249,7 +250,7 @@ const TYPES=['amount','percent','date','contact'];
 
 // ---------- settings ----------
 const SPIDER_DEF={size:1.8,leg:'#19b894',body:'#14161a',silk:true};
-const DEFAULTS={...SPIDER_DEF,bg:'crimson',bgBase:'#050002',bgGlow:'#8c0014',theme:'dark',accent:'red',fx:true,layout:'side',mode:'all',speed:1,auto:true,model:'Qwen2.5-1.5B-Instruct-q4f16_1-MLC'};
+const DEFAULTS={...SPIDER_DEF,sumFirst:false,bg:'crimson',bgBase:'#050002',bgGlow:'#8c0014',theme:'dark',accent:'red',fx:true,layout:'side',mode:'all',speed:1,auto:true,model:'Qwen2.5-1.5B-Instruct-q4f16_1-MLC'};
 let S={...DEFAULTS};
 try{Object.assign(S,JSON.parse(localStorage.getItem('docspider.settings.v3')||'{}'));}catch(e){}
 const save=()=>{try{localStorage.setItem('docspider.settings.v3',JSON.stringify(S));}catch(e){}};
@@ -260,7 +261,7 @@ function applySettings(){
     document.querySelectorAll(id+' [data-v]').forEach(e=>e.classList.toggle('on',e.dataset.v===S[k]));
   $('#t-fx').classList.toggle('on',S.fx);$('#t-auto').classList.toggle('on',S.auto);
   $('#speed').value=S.speed;$('#speedLbl').textContent=S.speed+'×';$('#model').value=S.model;$('#modeHint').textContent=MODE_HINT[S.mode];
-  $('#size').value=S.size;$('#sizeLbl').textContent=S.size.toFixed(1)+'×';$('#legCol').value=S.leg;$('#bodyCol').value=S.body;$('#t-silk').classList.toggle('on',S.silk);
+  $('#size').value=S.size;$('#sizeLbl').textContent=S.size.toFixed(1)+'×';$('#legCol').value=S.leg;$('#bodyCol').value=S.body;$('#t-silk').classList.toggle('on',S.silk);$('#t-sum').classList.toggle('on',S.sumFirst);
   $('#bgBase').value=S.bgBase;$('#bgGlow').value=S.bgGlow;$('#bgCustom').style.display=S.bg==='custom'?'block':'none';
   const BG={crimson:['#040001','#140006','rgba(150,0,24,.42)','rgba(95,0,14,.38)','#7a0014','#3d0009'],black:['#000','#040404','transparent','transparent','transparent','transparent'],
             custom:[S.bgBase,S.bgBase,`color-mix(in srgb,${S.bgGlow} 45%,transparent)`,`color-mix(in srgb,${S.bgGlow} 32%,transparent)`,S.bgGlow,S.bgGlow]}[S.bg];
@@ -275,6 +276,7 @@ function bindSettings(){
   $('#model').onchange=e=>{S.model=e.target.value;save();};
   $('#size').oninput=e=>{S.size=parseFloat(e.target.value);save();applySettings();};
   for(const [id,k] of [['#legCol','leg'],['#bodyCol','body'],['#bgBase','bgBase'],['#bgGlow','bgGlow']])$(id).oninput=e=>{S[k]=e.target.value;save();applySettings();};
+  $('#t-sum').onclick=()=>{S.sumFirst=!S.sumFirst;save();applySettings();if(S.sumFirst)showSummary();};
   $('#t-silk').onclick=()=>{S.silk=!S.silk;save();applySettings();};
   $('#spReset').onclick=()=>{Object.assign(S,SPIDER_DEF);save();applySettings();};
   const open=v=>{$('#drawer').classList.toggle('open',v);$('#scrim').classList.toggle('open',v);};
@@ -365,7 +367,7 @@ async function handleFile(f){
   if(!f)return;stopTour();spider.visible=false;const token=++docToken;
   if(f.size===0){summaryEl.className='empty';summaryEl.textContent='This file is empty (0 KB). The download probably failed, so download it again and retry.';return;}
   summaryEl.className='empty';summaryEl.textContent='Opening document…';
-  tourMode=null;pagesEl.innerHTML='';$('#found').innerHTML='';items=[];pages=[];foundCount=0;aiText='';renderChips();updateCount();
+  tourMode=null;sumPending=false;pagesEl.innerHTML='';$('#found').innerHTML='';items=[];pages=[];foundCount=0;aiText='';renderChips();updateCount();
   $('#ai').disabled=true;$('#tour').disabled=true;
   try{
     const lib=await loadPdfjs();pdf=await lib.getDocument({data:await f.arrayBuffer()}).promise;
@@ -396,7 +398,8 @@ async function handleFile(f){
   renderChips();updateCount();
   setStatus(`${pages.length} page(s), ${items.length} items to find`,0);
   $('#ai').disabled=false;$('#tour').disabled=false;$('#ai').textContent='Summarize with AI';
-  summaryEl.className='';summaryEl.textContent=extractive(pages.map(p=>p.text).join('\n'));
+  sumPending=true;
+  if(S.sumFirst||!S.auto)showSummary();else{summaryEl.className='empty';summaryEl.textContent='The spider is reading the document. Key points appear when it finishes.';}
   if(S.auto)setTimeout(()=>{if(token===docToken)tour();},500);
 }
 function addPageEl(P){
@@ -562,7 +565,8 @@ function drawSpider(){
 requestAnimationFrame(frame);
 
 // ---------- tour ----------
-let touring=false,tourToken=0,tourMode=null;
+let touring=false,tourToken=0,tourMode=null,sumPending=false;
+function showSummary(){if(!sumPending||!pages.length)return;sumPending=false;summaryEl.className='';summaryEl.textContent=extractive(pages.map(p=>p.text).join('\n'));}
 const KEYS=/\b(approved|authoriz|total|net |revenue|increase|decrease|decline|risk|deadline|due|must|required|expire|penalt|fee|effective|terminat|material|loss|profit|guidance|repurchase|dividend|liabilit|obligation|shall|agree)/i;
 function scoreItem(it){
   let sc={amount:4,percent:3,date:2,contact:0.5}[it.type]||1;
@@ -603,10 +607,10 @@ async function tour(){
     if(token!==tourToken)return;
     await wait(150/S.speed);
   }
-  if(token===tourToken){touring=false;$('#tour').textContent='Send spider';setStatus(`Done. ${foundCount} of ${items.length} items marked.`,1);}
+  if(token===tourToken){touring=false;$('#tour').textContent='Send spider';setStatus(`Done. ${foundCount} of ${items.length} items marked.`,1);showSummary();}
 }
 function stopTour(){tourToken++;touring=false;$('#tour').textContent='Send spider';}
-$('#tour').onclick=()=>touring?stopTour():tour();
+$('#tour').onclick=()=>{if(touring){stopTour();showSummary();}else tour();};
 
 // ---------- quick extractive summary ----------
 function extractive(text,k=6){
@@ -631,7 +635,7 @@ async function ask(eng,system,user,onTok,maxTokens=400){
   let acc='';for await(const ch of stream){acc+=ch.choices[0]?.delta?.content||'';onTok&&onTok(acc);}return acc.trim();
 }
 $('#ai').onclick=async()=>{
-  const btn=$('#ai');btn.disabled=true;summaryEl.className='';summaryEl.textContent='';
+  sumPending=false;const btn=$('#ai');btn.disabled=true;summaryEl.className='';summaryEl.textContent='';
   try{
     const eng=await getEngine(S.model);
     const full=pages.map(p=>`[Page ${p.n}]\n${p.text}`).join('\n\n');let chunks=chunkText(full);const MAXC=14;
