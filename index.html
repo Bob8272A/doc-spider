@@ -287,7 +287,7 @@ function bindSettings(){
 applySettings();bindSettings();
 
 // ---------- state ----------
-let pdf=null, pages=[], items=[], activeTypes=new Set(TYPES), foundCount=0, docToken=0;
+let loading=false, pdf=null, pages=[], items=[], activeTypes=new Set(TYPES), foundCount=0, docToken=0;
 let engine=null, engineModel=null, aiText='';
 const setStatus=(msg,frac)=>{statusEl.textContent=msg;bar.style.width=(Math.max(0,Math.min(1,frac||0))*100)+'%';};
 const esc=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
@@ -357,7 +357,7 @@ function rectsFor(hit,map){
   return rs;
 }
 async function ocrItems(page,worker){
-  const sc=2,vp=page.getViewport({scale:sc});const cv=document.createElement('canvas');cv.width=vp.width;cv.height=vp.height;
+  const sc=1.7,vp=page.getViewport({scale:sc});const cv=document.createElement('canvas');cv.width=vp.width;cv.height=vp.height;
   await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
   const {data}=await worker.recognize(cv);const out=[];
   for(const ln of data.lines||[]){const ws=ln.words||[];ws.forEach((w,i)=>{const b=w.bbox;out.push({str:w.text,x:b.x0/sc,top:b.y0/sc,w:(b.x1-b.x0)/sc,h:(b.y1-b.y0)/sc,eol:i===ws.length-1,sp:true,fam:'sans-serif'});});}
@@ -383,15 +383,24 @@ async function handleFile(f){
       pages.push(P);addPageEl(P);total+=its.reduce((a,i)=>a+i.str.length,0);
     }
     if(total<50){
-      summaryEl.textContent='This PDF has no text layer (scanned or printed to PDF). Reading it with on-device OCR, which is slow…';
+      summaryEl.textContent='This PDF has no text layer (scanned or printed to PDF), so it is being read with on-device OCR. The spider starts as soon as the first page is ready.';
       let T;try{T=await import(TESS);}catch(e){throw new Error('Could not load the OCR library. Check your internet connection.');}
-      const createWorker=T.createWorker||T.default?.createWorker;const worker=await createWorker('eng');
-      for(const P of pages){
-        if(token!==docToken){await worker.terminate();return;}
-        setStatus(`OCR page ${P.n} / ${pages.length}…`,P.n/pages.length);
-        P.its=await ocrItems(P.page,worker);indexPage(P);
-      }
-      await worker.terminate();
+      const createWorker=T.createWorker||T.default?.createWorker;
+      const nW=Math.max(2,Math.min(4,Math.floor((navigator.hardwareConcurrency||4)/2)));
+      let next=0,done=0,idx=0,started=false;const res=[];loading=true;
+      const flush=()=>{
+        while(res[idx]){const P=pages[idx];P.its=res[idx];indexPage(P);idx++;}
+        renderChips();updateCount();
+        if(!started&&items.length){started=true;$('#tour').disabled=false;if(S.auto)tour();}
+      };
+      try{
+        await Promise.all(Array.from({length:Math.min(nW,pages.length)},async()=>{
+          const worker=await createWorker('eng');
+          try{while(token===docToken){const i=next++;if(i>=pages.length)break;res[i]=await ocrItems(pages[i].page,worker);done++;setStatus(`OCR: ${done} / ${pages.length} pages read…`,done/pages.length);flush();}}
+          finally{try{await worker.terminate();}catch(e){}}
+        }));
+      }finally{loading=false;}
+      if(token!==docToken)return;
     }else for(const P of pages)indexPage(P);
   }catch(err){summaryEl.textContent='Could not read that file: '+err.message;setStatus('',0);return;}
   const chars=pages.reduce((a,p)=>a+p.text.length,0);
@@ -401,7 +410,7 @@ async function handleFile(f){
   $('#ai').disabled=false;$('#tour').disabled=false;$('#ai').textContent='Summarize with AI';
   sumPending=true;
   if(S.sumFirst||!S.auto)showSummary();else{summaryEl.className='empty';summaryEl.textContent='The spider is reading the document. Key points appear when it finishes.';}
-  if(S.auto)setTimeout(()=>{if(token===docToken)tour();},500);
+  if(S.auto&&!touring)setTimeout(()=>{if(token===docToken&&!touring)tour();},500);
 }
 function addPageEl(P){
   const el=document.createElement('div');el.className='pg';el.style.aspectRatio=P.w+' / '+P.h;el.style.maxWidth=Math.round(P.w*1.5)+'px';
@@ -598,15 +607,15 @@ async function walkTo(it,flash=true,token=null){
   if(flash){it.els.forEach(e=>e.classList.add('flash'));setTimeout(()=>it.els.forEach(e=>e.classList.remove('flash')),700);}
 }
 async function tour(){
-  if(!items.length)return;
+  if(!items.length&&!loading)return;
   if(tourMode!==S.mode){resetFound();tourMode=S.mode;}
-  let list=targets().filter(i=>!i.found);
-  if(!list.length){resetFound();list=targets();}
-  if(!list.length)return;
+  if(!loading&&!targets().some(i=>!i.found))resetFound();
   const token=++tourToken;touring=true;$('#tour').textContent='Stop spider';
-  if(!spider.visible){const p0=pages[list[0].page-1].el;placeSpider(p0.offsetLeft+p0.clientWidth/2,Math.max(0,p0.offsetTop-40));reader.scrollTop=Math.max(0,p0.offsetTop-40);}
-  for(const it of list){
-    if(token!==tourToken)return;
+  // pulls the next unvisited item each time, so it keeps up with pages that are still being read
+  while(token===tourToken){
+    const it=targets().find(i=>!i.found);
+    if(!it){if(loading){await wait(300);continue;}break;}
+    if(!spider.visible){const p0=it.P.el;placeSpider(p0.offsetLeft+p0.clientWidth/2,Math.max(0,p0.offsetTop-40));reader.scrollTop=Math.max(0,p0.offsetTop-40);}
     await walkTo(it,false,token);
     if(token!==tourToken)return;
     await wait(150/S.speed);
