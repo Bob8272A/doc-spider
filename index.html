@@ -409,6 +409,7 @@ async function handleFile(f){
   setStatus(`${pages.length} page(s), ${items.length} items to find`,0);
   $('#ai').disabled=false;$('#tour').disabled=false;$('#ai').textContent='Summarize with AI';
   sumPending=true;
+  if(!items.length){showSummary();setStatus('No amounts, percentages, dates or links were found in this document, so the spider has nothing to visit.',0);$('#tour').disabled=true;return;}
   if(S.sumFirst||!S.auto)showSummary();else{summaryEl.className='empty';summaryEl.textContent='The spider is reading the document. Key points appear when it finishes.';}
   if(S.auto&&!touring)setTimeout(()=>{if(token===docToken&&!touring)tour();},500);
 }
@@ -607,7 +608,7 @@ async function walkTo(it,flash=true,token=null){
   if(flash){it.els.forEach(e=>e.classList.add('flash'));setTimeout(()=>it.els.forEach(e=>e.classList.remove('flash')),700);}
 }
 async function tour(){
-  if(!items.length&&!loading)return;
+  if(!items.length&&!loading){showSummary();return;}
   if(tourMode!==S.mode){resetFound();tourMode=S.mode;}
   if(!loading&&!targets().some(i=>!i.found))resetFound();
   const token=++tourToken;touring=true;$('#tour').textContent='Stop spider';
